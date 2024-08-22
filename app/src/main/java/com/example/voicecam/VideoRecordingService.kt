@@ -24,12 +24,12 @@ class VideoRecordingService: Service(){
     inner class LocalBinder: Binder() {
         fun getService(): VideoRecordingService = this@VideoRecordingService
     }
-    override fun onBind(intent: Intent?): IBinder? {
-        Log.d("testing", "Service Bound")
+    override fun onBind(intent: Intent?): IBinder {
+        Log.d("testing", "Video Service Bound")
         return binder
     }
     override fun onUnbind(intent: Intent?): Boolean {
-        Log.d("testing", "Service Unbound")
+        Log.d("testing", "Video Service Unbound")
         return super.onUnbind(intent)
     }
     override fun onDestroy() {
@@ -49,13 +49,13 @@ class VideoRecordingService: Service(){
     fun stopLogging() {
         loggingJob?.cancel()
         loggingJob = null
-        Log.d("testing", "Service has stopped...")
+        Log.d("testing", "Video Service has stopped...")
     }
 
     suspend fun logMessage() {
         while (true) {
             delay(1000L)
-            Log.d("testing", "Service is doing something...")
+            Log.d("testing", "Video Service is doing something...")
         }
     }
 }

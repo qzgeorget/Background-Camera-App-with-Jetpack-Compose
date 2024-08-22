@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.os.IBinder
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Button
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -19,18 +20,33 @@ import androidx.compose.runtime.setValue
 
 class MainActivity: ComponentActivity() {
 
-    private var isBound: Boolean = false
-    private var myService: VideoRecordingService? = null
+    private var isBoundVideo: Boolean = false
+    private var videoService: VideoRecordingService? = null
 
-    private val connection= object: ServiceConnection{
+    private var isBoundAudio: Boolean = false
+    private var audioService: SpeechRecognitionService? = null
+
+    private val videoConnection= object: ServiceConnection{
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
             val binder = service as VideoRecordingService.LocalBinder
-            myService = binder.getService()
-            isBound = true
+            videoService = binder.getService()
+            isBoundVideo = true
         }
 
         override fun onServiceDisconnected(arg0: ComponentName) {
-            isBound = false
+            isBoundVideo = false
+        }
+    }
+
+    private val audioConnection= object: ServiceConnection{
+        override fun onServiceConnected(className: ComponentName, service: IBinder) {
+            val binder = service as SpeechRecognitionService.LocalBinder
+            audioService = binder.getService()
+            isBoundAudio = true
+        }
+
+        override fun onServiceDisconnected(arg0: ComponentName) {
+            isBoundAudio = false
         }
     }
 
@@ -42,32 +58,45 @@ class MainActivity: ComponentActivity() {
             }
         }
         Intent(this, VideoRecordingService::class.java).also { intent ->
-            bindService(intent, connection, Context.BIND_AUTO_CREATE)
+            bindService(intent, videoConnection, Context.BIND_AUTO_CREATE)
+        }
+        Intent(this, SpeechRecognitionService::class.java).also { intent ->
+            bindService(intent, audioConnection, Context.BIND_AUTO_CREATE)
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
 
-        if (isBound) {
-            unbindService(connection)
-            isBound = false
+        if (isBoundVideo) {
+            unbindService(videoConnection)
+            isBoundVideo = false
+        }
+        if (isBoundAudio) {
+            unbindService(audioConnection)
+            isBoundAudio = false
         }
     }
 
     @Composable
     fun MyApp() {
-        var isLogging by remember { mutableStateOf(false) }
-
-        Button(onClick={
-            if (isLogging) {
-                myService?.stopLogging()
-            } else {
-                myService?.startLogging()
+        var isVideoLogging by remember { mutableStateOf(false) }
+        Row {
+            Button(onClick={
+                if (isVideoLogging) {
+                    videoService?.stopLogging()
+                } else {
+                    videoService?.startLogging()
+                }
+                isVideoLogging = !isVideoLogging
+            }) {
+                Text(text = if (isVideoLogging) "Video Logging Started" else "Start Video Logging")
             }
-            isLogging = !isLogging
-        }) {
-            Text(text = if (isLogging) "Logging Started" else "Start Logging")
+            Button(onClick={
+                audioService?.logMessage()
+            }) {
+                Text(text = "Audio Message")
+            }
         }
     }
 
