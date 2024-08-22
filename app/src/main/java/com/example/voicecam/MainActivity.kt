@@ -57,13 +57,17 @@ class MainActivity: ComponentActivity() {
 
     @Composable
     fun MyApp() {
-        var buttonClicked by remember { mutableStateOf(false) }
+        var isLogging by remember { mutableStateOf(false) }
 
         Button(onClick={
-            buttonClicked = true
-            myService?.logMessage()
+            if (isLogging) {
+                myService?.stopLogging()
+            } else {
+                myService?.startLogging()
+            }
+            isLogging = !isLogging
         }) {
-            Text(text = if (buttonClicked) "Service Called" else "Call Service")
+            Text(text = if (isLogging) "Logging Started" else "Start Logging")
         }
     }
 
