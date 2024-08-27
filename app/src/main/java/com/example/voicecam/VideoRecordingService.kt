@@ -21,6 +21,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -34,6 +35,7 @@ class VideoRecordingService: Service(){
     private val job = Job()
     private var loggingJob: Job? = null
     private val serviceScope = CoroutineScope(Dispatchers.Default + job)
+    private var isRecording = false
 
 
     //Service helpers
@@ -102,7 +104,13 @@ class VideoRecordingService: Service(){
             .prepareRecording(this, outputOptions)
             .start(ContextCompat.getMainExecutor(this)) { recordEvent ->
                 when (recordEvent) {
-                    is VideoRecordEvent.Start -> Log.d("testing", "Recording started")
+                    is VideoRecordEvent.Start -> {
+                        Log.d("testing", "Recording started")
+                        CoroutineScope(Dispatchers.Main).launch {
+                            delay(5000L)
+                            stopRecording()
+                        }
+                    }
                     is VideoRecordEvent.Finalize -> {
                         if (!recordEvent.hasError()) {
                             Log.d("testing", "Video saved successfully to MediaStore")
@@ -124,7 +132,13 @@ class VideoRecordingService: Service(){
     fun startLogging() {
         if (loggingJob == null || loggingJob?.isCancelled == true) {
             loggingJob = serviceScope.launch{
-                logMessage()
+                while (isActive) {
+                    if (recording == null) { // Ensure no recording is in progress
+                        startRecording()
+                        // Wait for 5 seconds before starting the next recording
+                        delay(5000L)
+                    }
+                }
             }
         }
     }
