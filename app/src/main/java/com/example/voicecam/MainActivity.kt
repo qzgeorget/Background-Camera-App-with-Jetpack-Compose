@@ -118,13 +118,13 @@ class MainActivity: ComponentActivity(), keywordListener {
         Row {
             Button(onClick={
                 if (isVideoLogging) {
-                    videoService?.stopLogging()
+                    videoService?.stopRecording()
                 } else {
-                    videoService?.startLogging()
+                    videoService?.startRecording()
                 }
                 isVideoLogging = !isVideoLogging
             }) {
-                Text(text = if (isVideoLogging) "Video Logging Started" else "Start Video Logging")
+                Text(text = if (isVideoLogging) "Recording" else "Recording Ended")
             }
 
             Button(onClick={
