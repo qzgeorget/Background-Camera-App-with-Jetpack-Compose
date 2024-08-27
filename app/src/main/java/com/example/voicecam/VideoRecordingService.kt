@@ -1,5 +1,6 @@
 package com.example.voicecam
 
+import android.app.Application
 import android.app.Service
 import android.content.ContentValues
 import android.content.Intent
@@ -10,6 +11,7 @@ import android.provider.MediaStore
 import android.util.Log
 import androidx.camera.core.CameraSelector
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.video.FileOutputOptions
 import androidx.camera.video.MediaStoreOutputOptions
 import androidx.camera.video.Recorder
 import androidx.camera.video.Recording
@@ -23,6 +25,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -32,10 +37,14 @@ class VideoRecordingService: Service(){
     private var recording: Recording? = null
     private var videoCapture: VideoCapture<Recorder>? = null
 
+    private val videoFileQueue = ArrayDeque<File>()
+    private val maxVideos = 3
+
     private val job = Job()
     private var loggingJob: Job? = null
     private val serviceScope = CoroutineScope(Dispatchers.Default + job)
-    private var isRecording = false
+
+    private val queueMutex = Mutex()
 
 
     //Service helpers
@@ -82,23 +91,21 @@ class VideoRecordingService: Service(){
         }, ContextCompat.getMainExecutor(this))
     }
 
-    fun startRecording(){
+    private fun startRecording(){
         val videoCapture = videoCapture ?: return
 
         val name = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.UK).format(System.currentTimeMillis())
-        val contentValues = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, "VID_$name.mp4")
-            put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/MyAppVideos")
+        val file = File(filesDir, "VID_$name.mp4")
+
+        if (videoFileQueue.size >= maxVideos) {
+            val oldestFile = videoFileQueue.removeFirst()
+            if (oldestFile.exists()){
+                oldestFile.delete()
             }
         }
+        videoFileQueue.addLast(file)
 
-        val outputOptions = MediaStoreOutputOptions.Builder(
-            contentResolver,
-            MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-        ).setContentValues(contentValues)
-            .build()
+        val outputOptions = FileOutputOptions.Builder(file).build()
 
         recording = videoCapture.output
             .prepareRecording(this, outputOptions)
@@ -124,9 +131,40 @@ class VideoRecordingService: Service(){
             }
     }
 
-    fun stopRecording(){
+    private fun stopRecording(){
         recording?.stop()
         Log.d("testing", "Recording stopped")
+    }
+
+    fun saveVideosToMediaStore(){
+        serviceScope.launch{
+            queueMutex.withLock {
+                for (file in videoFileQueue){
+                    try{
+                        val contentValues = ContentValues().apply {
+                            put(MediaStore.MediaColumns.DISPLAY_NAME, file.name)
+                            put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/MyAppVideos")
+                            }
+                        }
+
+                        val uri = contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, contentValues)
+
+                        uri?.let {
+                            contentResolver.openOutputStream(it)?.use {outputStream ->
+                                file.inputStream().use{inputStream ->
+                                    inputStream.copyTo(outputStream)
+                                }
+                            }
+                            Log.d("testing", "Video saved to MediaStore: ${file.absolutePath}")
+                        }?: Log.e("testing", "Failed to save video to MediaStore: ${file.absolutePath}")
+                    } catch (exc: Exception) {
+                        Log.e("testing", "Error saving video to MediaStore: ${exc.message}")
+                    }
+                }
+            }
+        }
     }
 
     fun startLogging() {
@@ -147,12 +185,5 @@ class VideoRecordingService: Service(){
         loggingJob?.cancel()
         loggingJob = null
         Log.d("testing", "Video Service has stopped...")
-    }
-
-    suspend fun logMessage() {
-        while (true) {
-            delay(1000L)
-            Log.d("testing", "Video Service is doing something...")
-        }
     }
 }

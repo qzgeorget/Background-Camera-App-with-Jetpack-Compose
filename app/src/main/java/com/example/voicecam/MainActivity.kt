@@ -128,6 +128,12 @@ class MainActivity: ComponentActivity(), keywordListener {
             }
 
             Button(onClick={
+                videoService?.saveVideosToMediaStore()
+            }) {
+                Text(text = "Capture")
+            }
+
+            Button(onClick={
                 if (isAudioRecording) {
                     audioService?.stopListening()
                 } else {
