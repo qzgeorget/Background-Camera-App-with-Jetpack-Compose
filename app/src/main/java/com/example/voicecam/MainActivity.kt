@@ -6,6 +6,8 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.os.Bundle
 import android.os.IBinder
+import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -22,7 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalLifecycleOwner
 
-class MainActivity: ComponentActivity() {
+class MainActivity: ComponentActivity(), keywordListener {
 
     private var isBoundVideo: Boolean = false
     private var videoService: VideoRecordingService? = null
@@ -46,6 +48,7 @@ class MainActivity: ComponentActivity() {
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
             val binder = service as SpeechRecognitionService.LocalBinder
             audioService = binder.getService()
+            audioService?.setKeywordListener(this@MainActivity)
             isBoundAudio = true
         }
 
@@ -78,6 +81,7 @@ class MainActivity: ComponentActivity() {
         }
         if (isBoundAudio) {
             unbindService(audioConnection)
+            audioService?.setKeywordListener(null)
             isBoundAudio = false
         }
     }
@@ -86,9 +90,7 @@ class MainActivity: ComponentActivity() {
     fun GetPermissions(){
         val permissions = listOf(
             android.Manifest.permission.RECORD_AUDIO,
-            android.Manifest.permission.CAMERA,
-            android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
-            android.Manifest.permission.READ_EXTERNAL_STORAGE
+            android.Manifest.permission.CAMERA
         )
 
         var allPermissionGranted by remember { mutableStateOf(false)}
@@ -111,6 +113,8 @@ class MainActivity: ComponentActivity() {
     @Composable
     fun MyApp() {
         var isVideoLogging by remember { mutableStateOf(false) }
+        var isAudioRecording by remember { mutableStateOf(false) }
+
         Row {
             Button(onClick={
                 if (isVideoLogging) {
@@ -122,12 +126,23 @@ class MainActivity: ComponentActivity() {
             }) {
                 Text(text = if (isVideoLogging) "Video Logging Started" else "Start Video Logging")
             }
+
             Button(onClick={
-                audioService?.logMessage()
+                if (isAudioRecording) {
+                    audioService?.stopListening()
+                } else {
+                    audioService?.startListening()
+                }
+                isAudioRecording = !isAudioRecording
             }) {
-                Text(text = "Audio Message")
+                Text(text = if (isAudioRecording) "Stop Audio Recording" else "Start Audio Recording")
             }
         }
+    }
+
+    override fun onKeywordDetected(speechText: String){
+        Log.d("testing", "speechText: $speechText")
+        Toast.makeText(this, "Keyword detected: $speechText", Toast.LENGTH_SHORT).show()
     }
 
 }
