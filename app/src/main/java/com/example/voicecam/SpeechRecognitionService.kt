@@ -10,6 +10,10 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
 import android.widget.Toast
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 class SpeechRecognitionService: Service() {
@@ -17,6 +21,7 @@ class SpeechRecognitionService: Service() {
     private var speechRecognizer: SpeechRecognizer? = null
     private var keywordListener: keywordListener? = null
     private var isListening = false
+    var isServiceListening = false
 
     //Service Helpers
     inner class LocalBinder: Binder() {
@@ -50,35 +55,11 @@ class SpeechRecognitionService: Service() {
                 override fun onEndOfSpeech() {}
 
                 override fun onError(error: Int) {
-                    when (error) {
-                        SpeechRecognizer.ERROR_NO_MATCH -> {
-                            Toast.makeText(this@SpeechRecognitionService, "No match found. Please try again.", Toast.LENGTH_SHORT).show()
-                            Log.e("command", SpeechRecognizer.RESULTS_RECOGNITION)
-                            startListening()
-                        }
-                        SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
-                            Toast.makeText(this@SpeechRecognitionService, "No speech input. Please try again.", Toast.LENGTH_SHORT).show()
-                        }
-                        SpeechRecognizer.ERROR_CLIENT -> {
-                            Toast.makeText(this@SpeechRecognitionService, "Speech Recognizer stopped.", Toast.LENGTH_SHORT).show()
-                        }
-                        // Handle other errors accordingly
-                        else -> {
-                            Toast.makeText(this@SpeechRecognitionService, "An unknown error occurred: $error", Toast.LENGTH_SHORT).show()
-                        }
-                    }
+                    handleRecognitionError(error)
                 }
 
                 override fun onResults(results: Bundle?) {
-                    val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    val speechText = matches?.joinToString(separator = " ") ?: "No recognition"
-
-                    // Check for a specific keyword in the recognized speech
-                    if (speechText.contains("capture", ignoreCase = true)) {
-                        Log.d("testing", "speechText does contain capture")
-                        keywordListener?.onKeywordDetected("capture")
-                    }
-                    startListening()
+                    processRecognitionResults(results)
                 }
 
                 override fun onPartialResults(partialResults: Bundle?) {}
@@ -88,10 +69,41 @@ class SpeechRecognitionService: Service() {
         }
     }
 
+    private fun handleRecognitionError(error: Int) {
+        val message = when (error) {
+            SpeechRecognizer.ERROR_NO_MATCH -> "No match found. Please try again."
+            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech input. Please try again."
+            SpeechRecognizer.ERROR_CLIENT -> "Speech Recognizer stopped."
+            else -> "An unknown error occurred: $error"
+        }
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+
+        if(error == SpeechRecognizer.ERROR_CLIENT) {
+            return
+        }
+        // Delay before restarting listening to prevent rapid loops
+        CoroutineScope(Dispatchers.Main).launch {
+            delay(1000) // 1-second delay
+            startListening()
+        }
+    }
+
+    private fun processRecognitionResults(results: Bundle?) {
+        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+        val speechText = matches?.joinToString(separator = " ") ?: "No recognition"
+
+        if (speechText.contains("capture", ignoreCase = true)) {
+            Log.d("testing", "Speech text contains capture")
+            keywordListener?.onKeywordDetected("capture")
+        }
+        // Continue listening
+        startListening()
+    }
+
     //Operation functions
 
     fun startListening(){
-        if (!isListening) {
+        if (!isListening && isServiceListening) {
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
@@ -101,14 +113,15 @@ class SpeechRecognitionService: Service() {
             Log.d("testing", "Speech Recognizer Started")
             Toast.makeText(this@SpeechRecognitionService, "Speech Recognizer started.", Toast.LENGTH_SHORT).show()
         }
+        isListening = false
     }
 
     fun stopListening() {
-        if (isListening) {
+        if (!isServiceListening){
             speechRecognizer?.stopListening()
-            isListening = false
             Log.d("testing", "Speech Recognizer Stopped")
         }
+        isListening = false
     }
 
     fun setKeywordListener(listener: keywordListener?) {
