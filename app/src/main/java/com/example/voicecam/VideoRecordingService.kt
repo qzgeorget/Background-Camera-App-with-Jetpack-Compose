@@ -1,6 +1,12 @@
 package com.example.voicecam
 
+import android.annotation.SuppressLint
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
+import android.app.TaskStackBuilder
 import android.content.ContentValues
 import android.content.Intent
 import android.os.Binder
@@ -12,6 +18,7 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ProcessLifecycleOwner
 import kotlinx.coroutines.CoroutineScope
@@ -41,7 +48,6 @@ class VideoRecordingService: Service(){
     private val queueMutex = Mutex()
 
     private var capturing = false
-
 
     //Service helpers
     inner class LocalBinder: Binder() {

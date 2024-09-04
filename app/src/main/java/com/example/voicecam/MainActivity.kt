@@ -4,14 +4,19 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
+import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Button
 import androidx.compose.material3.Surface
@@ -57,6 +62,7 @@ class MainActivity: ComponentActivity(), keywordListener {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent{
@@ -65,6 +71,7 @@ class MainActivity: ComponentActivity(), keywordListener {
             }
         }
         Intent(this, VideoRecordingService::class.java).also { intent ->
+            startForegroundService(intent)
             bindService(intent, videoConnection, Context.BIND_AUTO_CREATE)
         }
         Intent(this, SpeechRecognitionService::class.java).also { intent ->
@@ -86,11 +93,13 @@ class MainActivity: ComponentActivity(), keywordListener {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     @Composable
     fun GetPermissions(){
         val permissions = listOf(
             android.Manifest.permission.RECORD_AUDIO,
-            android.Manifest.permission.CAMERA
+            android.Manifest.permission.CAMERA,
+            android.Manifest.permission.POST_NOTIFICATIONS
         )
 
         var allPermissionGranted by remember { mutableStateOf(false)}
@@ -135,8 +144,10 @@ class MainActivity: ComponentActivity(), keywordListener {
 
             Button(onClick={
                 if (isAudioRecording) {
+                    audioService?.isServiceListening = false
                     audioService?.stopListening()
                 } else {
+                    audioService?.isServiceListening = true
                     audioService?.startListening()
                 }
                 isAudioRecording = !isAudioRecording
