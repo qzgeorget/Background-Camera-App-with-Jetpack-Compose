@@ -4,12 +4,9 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
-import android.os.PowerManager
-import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -17,7 +14,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
-import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Button
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -27,7 +23,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalLifecycleOwner
 
 class MainActivity: ComponentActivity(), keywordListener {
 
@@ -71,7 +66,6 @@ class MainActivity: ComponentActivity(), keywordListener {
             }
         }
         Intent(this, VideoRecordingService::class.java).also { intent ->
-            startForegroundService(intent)
             bindService(intent, videoConnection, Context.BIND_AUTO_CREATE)
         }
         Intent(this, SpeechRecognitionService::class.java).also { intent ->
@@ -121,45 +115,28 @@ class MainActivity: ComponentActivity(), keywordListener {
 
     @Composable
     fun MyApp() {
-        var isVideoLogging by remember { mutableStateOf(false) }
-        var isAudioRecording by remember { mutableStateOf(false) }
+        var isLogging by remember { mutableStateOf(false) }
 
-        Row {
-            Button(onClick={
-                if (isVideoLogging) {
-                    videoService?.stopLogging()
-                } else {
-                    videoService?.startLogging()
-                }
-                isVideoLogging = !isVideoLogging
-            }) {
-                Text(text = if (isVideoLogging) "Recording" else "Recording Ended")
+        Button(onClick={
+            if (isLogging) {
+                videoService?.stopLogging()
+                audioService?.isServiceListening = false
+                audioService?.stopListening()
+            } else {
+                videoService?.startLogging()
+                audioService?.isServiceListening = true
+                audioService?.startListening()
             }
-
-            Button(onClick={
-                videoService?.saveVideosToMediaStore()
-            }) {
-                Text(text = "Capture")
-            }
-
-            Button(onClick={
-                if (isAudioRecording) {
-                    audioService?.isServiceListening = false
-                    audioService?.stopListening()
-                } else {
-                    audioService?.isServiceListening = true
-                    audioService?.startListening()
-                }
-                isAudioRecording = !isAudioRecording
-            }) {
-                Text(text = if (isAudioRecording) "Stop Audio Recording" else "Start Audio Recording")
-            }
+            isLogging = !isLogging
+        }) {
+            Text(text = if (isLogging) "Logging Now" else "Press to Start Logging")
         }
     }
 
     override fun onKeywordDetected(speechText: String){
         Log.d("testing", "speechText: $speechText")
         Toast.makeText(this, "Keyword detected: $speechText", Toast.LENGTH_SHORT).show()
+        videoService?.saveImagesToMediaStore()
     }
 
 }

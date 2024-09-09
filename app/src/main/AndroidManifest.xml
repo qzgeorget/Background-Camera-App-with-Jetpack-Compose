@@ -14,6 +14,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+
 
     <application
         android:allowBackup="true"
@@ -26,11 +30,13 @@
         android:theme="@style/Theme.VoiceCam"
         tools:targetApi="31">
 
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyAs5PKtka0Y9b3JmGsy5s2BHWHBc5XH3Dc"/>  <!-- Right here -->
+
         <service android:name=".VideoRecordingService"
             android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="camera"
-            tools:ignore="ForegroundServicePermission" />
+            android:exported="false"/>
         <service android:name=".SpeechRecognitionService"
             android:exported="false"/>
 

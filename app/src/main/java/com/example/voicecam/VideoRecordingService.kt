@@ -140,7 +140,7 @@ class VideoRecordingService: Service(){
             })
     }
 
-    fun saveVideosToMediaStore(){
+    fun saveImagesToMediaStore(){
         serviceScope.launch{
             queueMutex.withLock {
                 for (file in imageFileQueue){
