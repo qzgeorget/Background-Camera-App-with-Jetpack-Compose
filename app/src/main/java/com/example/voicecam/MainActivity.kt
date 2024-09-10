@@ -14,6 +14,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Button
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -23,8 +26,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.GoogleMap
+import com.google.android.gms.maps.MapView
+import com.google.android.gms.maps.OnMapReadyCallback
+import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.MarkerOptions
 
-class MainActivity: ComponentActivity(), keywordListener {
+class MainActivity: ComponentActivity(), keywordListener, OnMapReadyCallback {
 
     private var isBoundVideo: Boolean = false
     private var videoService: VideoRecordingService? = null
@@ -57,6 +69,9 @@ class MainActivity: ComponentActivity(), keywordListener {
         }
     }
 
+    private lateinit var mapView: MapView
+    private lateinit var googleMap: GoogleMap
+
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -71,6 +86,25 @@ class MainActivity: ComponentActivity(), keywordListener {
         Intent(this, SpeechRecognitionService::class.java).also { intent ->
             bindService(intent, audioConnection, Context.BIND_AUTO_CREATE)
         }
+
+        mapView = MapView(this)
+        mapView.onCreate(savedInstanceState)
+        mapView.getMapAsync(this)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        mapView.onResume()
+    }
+
+    override fun onPause() {
+        mapView.onPause()
+        super.onPause()
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        mapView.onLowMemory()
     }
 
     override fun onDestroy() {
@@ -85,6 +119,8 @@ class MainActivity: ComponentActivity(), keywordListener {
             audioService?.setKeywordListener(null)
             isBoundAudio = false
         }
+
+        mapView.onDestroy()
     }
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
@@ -117,20 +153,47 @@ class MainActivity: ComponentActivity(), keywordListener {
     fun MyApp() {
         var isLogging by remember { mutableStateOf(false) }
 
-        Button(onClick={
-            if (isLogging) {
-                videoService?.stopLogging()
-                audioService?.isServiceListening = false
-                audioService?.stopListening()
-            } else {
-                videoService?.startLogging()
-                audioService?.isServiceListening = true
-                audioService?.startListening()
+        Column(){
+            Button(onClick={
+                if (isLogging) {
+                    videoService?.stopLogging()
+                    audioService?.isServiceListening = false
+                    audioService?.stopListening()
+                } else {
+                    videoService?.startLogging()
+                    audioService?.isServiceListening = true
+                    audioService?.startListening()
+                }
+                isLogging = !isLogging
+            }) {
+                Text(text = if (isLogging) "Logging Now" else "Press to Start Logging")
             }
-            isLogging = !isLogging
-        }) {
-            Text(text = if (isLogging) "Logging Now" else "Press to Start Logging")
+
+            Box(modifier = Modifier.fillMaxSize()) {
+                // Google Map Composable
+                GoogleMapComponent()
+            }
         }
+    }
+
+    override fun onMapReady(map: GoogleMap) {
+        googleMap = map
+        val location = LatLng(37.7749, -122.4194)
+        googleMap.addMarker(MarkerOptions().position(location).title("Marker in San Francisco"))
+        googleMap.moveCamera(CameraUpdateFactory.newLatLng(location))
+    }
+
+    @Composable
+    fun GoogleMapComponent(){
+        val context = LocalContext.current
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = {
+                mapView.apply{
+                    onResume()
+                }
+            }
+        )
     }
 
     override fun onKeywordDetected(speechText: String){
