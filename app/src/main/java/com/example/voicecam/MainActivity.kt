@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
@@ -16,6 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -34,9 +36,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.lifecycleScope
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.MapView
 import com.google.android.gms.maps.OnMapReadyCallback
+import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.launch
 
 class MainActivity: ComponentActivity(), keywordListener, OnMapReadyCallback {
@@ -74,13 +79,19 @@ class MainActivity: ComponentActivity(), keywordListener, OnMapReadyCallback {
 
     private lateinit var mapView: MapView
     private lateinit var googleMap: GoogleMap
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
+    private var userLocation: LatLng? = null
+
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             Surface {
-                GetPermissions()
+                GetPermissions{
+                    setInitialLocation()
+                    MyApp()
+                }
             }
         }
         Intent(this, VideoRecordingService::class.java).also { intent ->
@@ -90,9 +101,18 @@ class MainActivity: ComponentActivity(), keywordListener, OnMapReadyCallback {
             bindService(intent, audioConnection, Context.BIND_AUTO_CREATE)
         }
 
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+
         mapView = MapView(this)
         mapView.onCreate(savedInstanceState)
-        mapView.getMapAsync(this) // Set the callback to `this` which is `OnMapReadyCallback`
+        mapView.getMapAsync { map ->
+            googleMap = map
+            if (userLocation == null) {
+                setInitialLocation()
+            } else {
+                setMapStartLocation(googleMap, userLocation!!)
+            }
+        }
     }
 
     override fun onResume() {
@@ -128,11 +148,12 @@ class MainActivity: ComponentActivity(), keywordListener, OnMapReadyCallback {
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     @Composable
-    fun GetPermissions() {
+    fun GetPermissions(onPermissionsGranted: @Composable () -> Unit) {
         val permissions = listOf(
             android.Manifest.permission.RECORD_AUDIO,
             android.Manifest.permission.CAMERA,
-            android.Manifest.permission.POST_NOTIFICATIONS
+            android.Manifest.permission.ACCESS_FINE_LOCATION,
+            android.Manifest.permission.ACCESS_COARSE_LOCATION
         )
 
         var allPermissionGranted by remember { mutableStateOf(false) }
@@ -148,15 +169,17 @@ class MainActivity: ComponentActivity(), keywordListener, OnMapReadyCallback {
         }
 
         if (allPermissionGranted) {
-            MyApp()
+            onPermissionsGranted()
         }
     }
 
     @Composable
     fun MyApp() {
         var isLogging by remember { mutableStateOf(false) }
-        var searchQuery by remember { mutableStateOf("") }
+        var originSearchQuery by remember { mutableStateOf("") }
+        var destinationSearchQuery by remember { mutableStateOf("") }
         val context = LocalContext.current
+
 
         Column() {
             Button(onClick = {
@@ -175,15 +198,33 @@ class MainActivity: ComponentActivity(), keywordListener, OnMapReadyCallback {
             }
 
             OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                label = { Text("Search for a place") },
-                modifier = Modifier.fillMaxWidth().padding(16.dp)
+                value = originSearchQuery,
+                onValueChange = { originSearchQuery = it },
+                label = { Text("Origin Location") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            )
+            OutlinedTextField(
+                value = destinationSearchQuery,
+                onValueChange = { destinationSearchQuery = it },
+                label = { Text("Destination Location") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
             )
 
             Button(onClick = {
                 lifecycleScope.launch {
-                    searchLocationAndDrawRoute(context, searchQuery, googleMap)
+                    if (originSearchQuery.isEmpty()) {
+                        userLocation?.let { origin ->
+                            searchLocationAndDrawRoute(context, origin, destinationSearchQuery, googleMap)
+                        } ?: run {
+                            Toast.makeText(context, "Unable to get current location", Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        searchLocationAndDrawRoute(context, originSearchQuery, destinationSearchQuery, googleMap)
+                    }
                 }
             }, modifier = Modifier.padding(16.dp)) {
                 Text("Search and Navigate")
@@ -207,7 +248,29 @@ class MainActivity: ComponentActivity(), keywordListener, OnMapReadyCallback {
     // Implement the onMapReady method from OnMapReadyCallback
     override fun onMapReady(map: GoogleMap) {
         googleMap = map
-        val startLocation = getInitialLocation()
-        setMapStartLocation(googleMap, startLocation)
+        setInitialLocation()
+    }
+
+    private fun setInitialLocation(){
+        if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED){
+            fusedLocationClient.lastLocation.addOnCompleteListener {task ->
+                if (task.isSuccessful && task.result != null) {
+                    val location = task.result
+                    location?.let{
+                        userLocation = LatLng(it.latitude, it.longitude)
+                        userLocation?.let { loc ->
+                            setMapStartLocation(googleMap, loc)
+                        }
+                        Log.d("user location", userLocation.toString())
+                    }
+                } else {
+                    val defaultLocation = getDefaultLocation()
+                    setMapStartLocation(googleMap, defaultLocation)
+                }
+            }
+        } else {
+            val defaultLocation = getDefaultLocation()
+            setMapStartLocation(googleMap, defaultLocation)
+        }
     }
 }

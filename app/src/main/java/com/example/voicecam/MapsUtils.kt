@@ -1,26 +1,21 @@
 package com.example.voicecam
 
 import android.content.Context
-import android.provider.Settings.System.getString
 import android.util.Log
 import android.widget.Toast
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.lifecycle.lifecycleScope
-import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MarkerOptions
 import com.google.android.gms.maps.model.PolylineOptions
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
 
-fun getInitialLocation(): LatLng {
+fun getDefaultLocation(): LatLng {
     return LatLng(37.7749, -122.4194)
 }
 
@@ -30,7 +25,7 @@ fun setMapStartLocation(googleMap: GoogleMap, location: LatLng){
 }
 
 
-suspend fun searchLocationAndDrawRoute(context: Context, location: String, googleMap: GoogleMap){
+suspend fun searchLocationAndDrawRoute(context: Context, origin: LatLng, location: String, googleMap: GoogleMap){
     if (location.isEmpty()){
         withContext(Dispatchers.Main) {
             Toast.makeText(context, "Please enter a location to search", Toast.LENGTH_SHORT).show()
@@ -50,11 +45,49 @@ suspend fun searchLocationAndDrawRoute(context: Context, location: String, googl
         val destinationAddress = addresses[0]
         val destination = LatLng(destinationAddress.latitude, destinationAddress.longitude)
         withContext(Dispatchers.Main) {
-            drawRoute(context, googleMap, getInitialLocation(), destination)
+            drawRoute(context, googleMap, origin, destination)
         }
     }else {
         withContext(Dispatchers.Main) {
             Toast.makeText(context, "Location not found", Toast.LENGTH_SHORT).show()
+        }
+    }
+}
+
+suspend fun searchLocationAndDrawRoute(context: Context, originQuery: String, destinationQuery: String, googleMap: GoogleMap) {
+    if (originQuery.isEmpty() || destinationQuery.isEmpty()) {
+        withContext(Dispatchers.Main) {
+            Toast.makeText(context, "Please enter both origin and destination locations to search", Toast.LENGTH_SHORT).show()
+        }
+        return
+    }
+
+    val geocoder = android.location.Geocoder(context, Locale.getDefault())
+    val originAddresses = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+        geocoder.getFromLocationName(originQuery, 1) // New suspend function in API level 33
+    } else {
+        @Suppress("DEPRECATION")
+        geocoder.getFromLocationName(originQuery, 1)
+    }
+
+    val destinationAddresses = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+        geocoder.getFromLocationName(destinationQuery, 1) // New suspend function in API level 33
+    } else {
+        @Suppress("DEPRECATION")
+        geocoder.getFromLocationName(destinationQuery, 1)
+    }
+
+    if (originAddresses != null && originAddresses.isNotEmpty() && destinationAddresses != null && destinationAddresses.isNotEmpty()) {
+        val originAddress = originAddresses[0]
+        val destinationAddress = destinationAddresses[0]
+        val origin = LatLng(originAddress.latitude, originAddress.longitude)
+        val destination = LatLng(destinationAddress.latitude, destinationAddress.longitude)
+        withContext(Dispatchers.Main) {
+            drawRoute(context, googleMap, origin, destination)
+        }
+    } else {
+        withContext(Dispatchers.Main) {
+            Toast.makeText(context, "One or both locations not found", Toast.LENGTH_SHORT).show()
         }
     }
 }
