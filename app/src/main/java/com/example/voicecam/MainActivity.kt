@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.internal.composableLambda
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -36,6 +37,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.GoogleMap
@@ -90,7 +95,7 @@ class MainActivity: ComponentActivity(), keywordListener, OnMapReadyCallback {
             Surface {
                 GetPermissions{
                     setInitialLocation()
-                    MyApp()
+                    AppNavigation()
                 }
             }
         }
@@ -174,12 +179,19 @@ class MainActivity: ComponentActivity(), keywordListener, OnMapReadyCallback {
     }
 
     @Composable
-    fun MyApp() {
-        var isLogging by remember { mutableStateOf(false) }
-        var originSearchQuery by remember { mutableStateOf("") }
-        var destinationSearchQuery by remember { mutableStateOf("") }
-        val context = LocalContext.current
+    fun AppNavigation(){
+        val navController = rememberNavController()
 
+        NavHost(navController = navController, startDestination = "my_app"){
+            composable("my_app") { MyApp(navController)}
+            composable("my_map") { MyMap(navController)}
+        }
+
+    }
+
+    @Composable
+    fun MyApp(navController: NavHostController){
+        var isLogging by remember { mutableStateOf(false) }
 
         Column() {
             Button(onClick = {
@@ -196,6 +208,23 @@ class MainActivity: ComponentActivity(), keywordListener, OnMapReadyCallback {
             }) {
                 Text(text = if (isLogging) "Logging Now" else "Press to Start Logging")
             }
+
+            Button(onClick = {
+                navController.navigate("my_map")
+            }) {
+                Text("To the Map")
+            }
+        }
+    }
+
+    @Composable
+    fun MyMap(navController: NavHostController) {
+        var originSearchQuery by remember { mutableStateOf("") }
+        var destinationSearchQuery by remember { mutableStateOf("") }
+        val context = LocalContext.current
+
+
+        Column() {
 
             OutlinedTextField(
                 value = originSearchQuery,
@@ -214,20 +243,27 @@ class MainActivity: ComponentActivity(), keywordListener, OnMapReadyCallback {
                     .padding(16.dp)
             )
 
-            Button(onClick = {
-                lifecycleScope.launch {
-                    if (originSearchQuery.isEmpty()) {
-                        userLocation?.let { origin ->
-                            searchLocationAndDrawRoute(context, origin, destinationSearchQuery, googleMap)
-                        } ?: run {
-                            Toast.makeText(context, "Unable to get current location", Toast.LENGTH_SHORT).show()
+            Row{
+                Button(onClick = {
+                    lifecycleScope.launch {
+                        if (originSearchQuery.isEmpty()) {
+                            userLocation?.let { origin ->
+                                searchLocationAndDrawRoute(context, origin, destinationSearchQuery, googleMap)
+                            } ?: run {
+                                Toast.makeText(context, "Unable to get current location", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            searchLocationAndDrawRoute(context, originSearchQuery, destinationSearchQuery, googleMap)
                         }
-                    } else {
-                        searchLocationAndDrawRoute(context, originSearchQuery, destinationSearchQuery, googleMap)
                     }
+                }, modifier = Modifier.padding(16.dp)) {
+                    Text("Search and Navigate")
                 }
-            }, modifier = Modifier.padding(16.dp)) {
-                Text("Search and Navigate")
+                Button(onClick = {
+                    navController.navigate("my_app")
+                }, modifier = Modifier.padding(16.dp)) {
+                    Text("Back")
+                }
             }
 
             Box(modifier = Modifier.fillMaxSize()) {
